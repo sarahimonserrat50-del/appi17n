@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador API REST - Sistema MES</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 15px; }
+        .container { max-width: 850px; margin: auto; }
+        h2 { color: #38bdf8; text-align: center; margin-bottom: 5px; }
+        p.sub { text-align: center; color: #94a3b8; font-size: 13px; margin-top: 0; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 15px; }
+        .card { background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
+        .card h3 { margin-top: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+        .badge { padding: 3px 7px; border-radius: 4px; font-size: 11px; font-weight: bold; color: #fff; }
+        .post { background: #10b981; }
+        .patch { background: #f59e0b; }
+        .get { background: #3b82f6; }
+        label { display: block; font-size: 12px; color: #94a3b8; margin-top: 8px; margin-bottom: 3px; }
+        input, select { width: 100%; padding: 7px; border-radius: 4px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; font-size: 13px; }
+        button { width: 100%; padding: 8px; margin-top: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: #fff; background: #0284c7; }
+        button:hover { background: #0369a1; }
+        .console { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-top: 20px; font-family: monospace; font-size: 13px; }
+        .status-200 { color: #4ade80; font-weight: bold; }
+        .status-404 { color: #f87171; font-weight: bold; }
+        pre { margin: 8px 0 0 0; white-space: pre-wrap; color: #cbd5e1; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🏭 Simulador API REST - Línea de Producción MES</h2>
+    <p class="sub">Pruebas interactivas de Endpoints, Verbos HTTP, JSON y Códigos de Respuesta</p>
+
+    <div class="grid">
+        <!-- PRÁCTICA 1: POST -->
+        <div class="card">
+            <h3><span class="badge post">POST</span> Práctica 1: Registrar Pieza</h3>
+            <small style="color:#94a3b8;">Endpoint: <code>/api/piezas</code></small>
+            <label>ID de Pieza:</label>
+            <input type="number" id="postId" value="123">
+            <label>Modelo / Lote:</label>
+            <input type="text" id="postModelo" value="Eje-Turbina-A">
+            <label>Peso (kg):</label>
+            <input type="number" id="postPeso" step="0.1" value="14.8">
+            <label>Estado Inicial:</label>
+            <select id="postEstado">
+                <option value="ok">OK (Aprobada)</option>
+                <option value="defectuosa">Defectuosa</option>
+            </select>
+            <button onclick="ejecutarPost()">Enviar POST /api/piezas</button>
+        </div>
+
+        <!-- PRÁCTICA 2: PATCH -->
+        <div class="card">
+            <h3><span class="badge patch">PATCH</span> Práctica 2: Corregir Peso</h3>
+            <small style="color:#94a3b8;">Endpoint: <code>/api/piezas/{id}</code></small>
+            <label>ID de la Pieza a corregir:</label>
+            <input type="number" id="patchId" value="123">
+            <label>Nuevo Peso Corregido (kg):</label>
+            <input type="number" id="patchPeso" step="0.1" value="12.5">
+            <button style="background:#d97706;" onclick="ejecutarPatch()">Enviar PATCH /api/piezas/123</button>
+        </div>
+
+        <!-- PRÁCTICA 3: GET BY ID (404) -->
+        <div class="card">
+            <h3><span class="badge get">GET</span> Práctica 3: Buscar por ID</h3>
+            <small style="color:#94a3b8;">Endpoint: <code>/api/piezas/{id}</code></small>
+            <label>ID a consultar (Prueba 999):</label>
+            <input type="number" id="getId" value="999">
+            <button onclick="ejecutarGetId()">Enviar GET /api/piezas/999</button>
+        </div>
+
+        <!-- PRÁCTICA 4: GET QUERY PARAM -->
+        <div class="card">
+            <h3><span class="badge get">GET</span> Práctica 4: Filtrar Estado</h3>
+            <small style="color:#94a3b8;">Endpoint: <code>/api/piezas?estado=...</code></small>
+            <label>Filtrar por Query Parameter:</label>
+            <select id="getFiltro">
+                <option value="defectuosa">?estado=defectuosa</option>
+                <option value="ok">?estado=ok</option>
+                <option value="todas">Sin filtro (/api/piezas)</option>
+            </select>
+            <button onclick="ejecutarGetFiltro()">Consultar Piezas</button>
+        </div>
+    </div>
+
+    <!-- CONSOLA DE RESPUESTA HTTP -->
+    <div class="console">
+        <div>📡 <strong>Petición Ejecutada:</strong> <span id="reqInfo" style="color:#38bdf8;">Ninguna aún</span></div>
+        <div style="margin-top:5px;">🚦 <strong>Código HTTP:</strong> <span id="resStatus">-</span></div>
+        <div style="margin-top:8px; color:#94a3b8;">📦 <strong>Cuerpo de Respuesta (JSON):</strong></div>
+        <pre id="resJson">{ "mensaje": "Ejecuta una práctica arriba para ver la respuesta del servidor..." }</pre>
+    </div>
+</div>
+
+<script>
+    // Inicializar base de datos simulada con algunas piezas de ejemplo si está vacía
+    if (!localStorage.getItem("mes_piezas")) {
+        const iniciales = [
+            { id: 120, modelo: "Soporte-B", peso: 5.2, estado: "ok" },
+            { id: 121, modelo: "Engrane-X", peso: 3.1, estado: "defectuosa" },
+            { id: 122, modelo: "Valvula-9", peso: 1.8, estado: "defectuosa" }
+        ];
+        localStorage.setItem("mes_piezas", JSON.stringify(iniciales));
+    }
+
+    function obtenerDB() {
+        return JSON.parse(localStorage.getItem("mes_piezas")) || [];
+    }
+
+    function guardarDB(data) {
+        localStorage.setItem("mes_piezas", JSON.stringify(data));
+    }
+
+    function mostrarRespuesta(metodo, endpoint, status, textoStatus, payload) {
+        document.getElementById("reqInfo").innerText = `${metodo} ${endpoint}`;
+        const statusEl = document.getElementById("resStatus");
+        statusEl.innerText = `${status} ${textoStatus}`;
+        statusEl.className = status >= 400 ? "status-404" : "status-200";
+        document.getElementById("resJson").innerText = JSON.stringify(payload, null, 2);
+    }
+
+    // PRÁCTICA 1: POST /api/piezas
+    function ejecutarPost() {
+        const id = parseInt(document.getElementById("postId").value);
+        const modelo = document.getElementById("postModelo").value.trim();
+        const peso = parseFloat(document.getElementById("postPeso").value);
+        const estado = document.getElementById("postEstado").value;
+
+        let db = obtenerDB();
+        if (db.some(p => p.id === id)) {
+            mostrarRespuesta("POST", "/api/piezas", 409, "Conflict", { error: `La pieza con id ${id} ya existe en la línea.` });
+            return;
+        }
+
+        const nuevaPieza = { id, modelo, peso, estado };
+        db.push(nuevaPieza);
+        guardarDB(db);
+
+        mostrarRespuesta("POST", "/api/piezas", 201, "Created", {
+            mensaje: "Pieza registrada exitosamente en MES",
+            data: nuevaPieza
+        });
+    }
+
+    // PRÁCTICA 2: PATCH /api/piezas/{id}
+    function ejecutarPatch() {
+        const id = parseInt(document.getElementById("patchId").value);
+        const nuevoPeso = parseFloat(document.getElementById("patchPeso").value);
+
+        let db = obtenerDB();
+        const index = db.findIndex(p => p.id === id);
+
+        if (index === -1) {
+            mostrarRespuesta("PATCH", `/api/piezas/${id}`, 404, "Not Found", { error: `No se encontró la pieza con id ${id} para actualizar.` });
+            return;
+        }
+
+        db[index].peso = nuevoPeso;
+        guardarDB(db);
+
+        mostrarRespuesta("PATCH", `/api/piezas/${id}`, 200, "OK", {
+            mensaje: "Peso actualizado correctamente mediante PATCH",
+            data: db[index]
+        });
+    }
+
+    // PRÁCTICA 3: GET /api/piezas/{id}
+    function ejecutarGetId() {
+        const id = parseInt(document.getElementById("getId").value);
+        const db = obtenerDB();
+        const pieza = db.find(p => p.id === id);
+
+        if (!pieza) {
+            mostrarRespuesta("GET", `/api/piezas/${id}`, 404, "Not Found", {
+                error: "Recurso no encontrado",
+                detalle: `La pieza con id ${id} no existe en los registros del MES.`
+            });
+            return;
+        }
+
+        mostrarRespuesta("GET", `/api/piezas/${id}`, 200, "OK", pieza);
+    }
+
+    // PRÁCTICA 4: GET /api/piezas?estado=defectuosa
+    function ejecutarGetFiltro() {
+        const filtro = document.getElementById("getFiltro").value;
+        const db = obtenerDB();
+
+        if (filtro === "todas") {
+            mostrarRespuesta("GET", "/api/piezas", 200, "OK", { total: db.length, piezas: db });
+            return;
+        }
+
+        const filtradas = db.filter(p => p.estado === filtro);
+        mostrarRespuesta("GET", `/api/piezas?estado=${filtro}`, 200, "OK", {
+            filtro_aplicado: filtro,
+            total_encontradas: filtradas.length,
+            piezas: filtradas
+        });
+    }
+</script>
+
+</body>
+</html>
